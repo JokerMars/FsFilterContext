@@ -14,15 +14,18 @@ Environment:
 
 --*/
 
-#include <fltKernel.h>
-#include <dontuse.h>
-#include <suppress.h>
+#include "Common.h"
+#include "Strategy.h"
+#include "Context.h"
+
 
 #pragma prefast(disable:__WARNING_ENCODE_MEMBER_FUNCTION_POINTER, "Not valid for kernel mode drivers")
 
 
 PFLT_FILTER gFilterHandle;
 ULONG_PTR OperationStatusCtx = 1;
+PFILE_TYPE_PROCESS head;
+ULONG offset;
 
 #define PTDBG_TRACE_ROUTINES            0x00000001
 #define PTDBG_TRACE_OPERATION_STATUS    0x00000002
@@ -79,40 +82,28 @@ FsFilterContextInstanceQueryTeardown (
     _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
     );
 
-FLT_PREOP_CALLBACK_STATUS
-FsFilterContextPreOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+//My designed protocol
 
-VOID
-FsFilterContextOperationStatusCallback (
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_ PFLT_IO_PARAMETER_BLOCK ParameterSnapshot,
-    _In_ NTSTATUS OperationStatus,
-    _In_ PVOID RequesterContext
-    );
+FLT_PREOP_CALLBACK_STATUS
+PreCreate(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext);
 
 FLT_POSTOP_CALLBACK_STATUS
-FsFilterContextPostOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_opt_ PVOID CompletionContext,
-    _In_ FLT_POST_OPERATION_FLAGS Flags
-    );
+PostCreate(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext, _In_ FLT_POST_OPERATION_FLAGS Flags);
 
 FLT_PREOP_CALLBACK_STATUS
-FsFilterContextPreOperationNoPostOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+PreRead(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext);
 
-BOOLEAN
-FsFilterContextDoRequestOperationStatus(
-    _In_ PFLT_CALLBACK_DATA Data
-    );
+FLT_POSTOP_CALLBACK_STATUS
+PostRead(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext, _In_ FLT_POST_OPERATION_FLAGS Flags);
+
+
+ULONG GetProcessNameOffset();
+PCHAR GetCurrentProcessName();
+
 
 EXTERN_C_END
 
@@ -134,206 +125,34 @@ EXTERN_C_END
 //
 
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
+	{
+		IRP_MJ_CREATE,
+		0,
+		PreCreate,
+		PostCreate
+	},
 
-#if 0 // TODO - List all of the requests to filter.
-    { IRP_MJ_CREATE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_CREATE_NAMED_PIPE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_CLOSE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_READ,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_WRITE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_QUERY_INFORMATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SET_INFORMATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_QUERY_EA,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SET_EA,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_FLUSH_BUFFERS,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_QUERY_VOLUME_INFORMATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SET_VOLUME_INFORMATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_DIRECTORY_CONTROL,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_FILE_SYSTEM_CONTROL,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_DEVICE_CONTROL,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_INTERNAL_DEVICE_CONTROL,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SHUTDOWN,
-      0,
-      FsFilterContextPreOperationNoPostOperation,
-      NULL },                               //post operations not supported
-
-    { IRP_MJ_LOCK_CONTROL,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_CLEANUP,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_CREATE_MAILSLOT,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_QUERY_SECURITY,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SET_SECURITY,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_QUERY_QUOTA,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_SET_QUOTA,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_PNP,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_RELEASE_FOR_SECTION_SYNCHRONIZATION,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_ACQUIRE_FOR_MOD_WRITE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_RELEASE_FOR_MOD_WRITE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_ACQUIRE_FOR_CC_FLUSH,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_RELEASE_FOR_CC_FLUSH,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_FAST_IO_CHECK_IF_POSSIBLE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_NETWORK_QUERY_OPEN,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_MDL_READ,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_MDL_READ_COMPLETE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_PREPARE_MDL_WRITE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_MDL_WRITE_COMPLETE,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_VOLUME_MOUNT,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-    { IRP_MJ_VOLUME_DISMOUNT,
-      0,
-      FsFilterContextPreOperation,
-      FsFilterContextPostOperation },
-
-#endif // TODO
+	{
+		IRP_MJ_READ,
+		0,
+		PreRead,
+		PostRead
+	},
 
     { IRP_MJ_OPERATION_END }
+};
+
+CONST FLT_CONTEXT_REGISTRATION ContextNotifications[]=
+{
+	{
+		FLT_STREAMHANDLE_CONTEXT,
+		0,
+		CleanupStreamHandleContext,
+		sizeof(STREAM_HANDLE_CONTEXT),
+		STREAM_HANDLE_CONTEXT_TAG
+	},
+
+	{FLT_CONTEXT_END}
 };
 
 //
@@ -346,7 +165,7 @@ CONST FLT_REGISTRATION FilterRegistration = {
     FLT_REGISTRATION_VERSION,           //  Version
     0,                                  //  Flags
 
-    NULL,                               //  Context
+    ContextNotifications,                               //  Context
     Callbacks,                          //  Operation callbacks
 
     FsFilterContextUnload,                           //  MiniFilterUnload
@@ -553,12 +372,19 @@ Return Value:
 
     UNREFERENCED_PARAMETER( RegistryPath );
 
-    PT_DBG_PRINT( PTDBG_TRACE_ROUTINES,
-                  ("FsFilterContext!DriverEntry: Entered\n") );
+	DbgPrint("FsFilterContext!DriverEntry: Entered\n");
 
     //
     //  Register with FltMgr to tell it our callback routines
     //
+	offset = GetProcessNameOffset();
+	DbgPrint("Process name offset: %d", offset);
+
+	PCHAR str = ".txt=notepad.exe,TxtReader.exe,;.jpg=ImageView.exe,explore.exe,;";
+
+	head = GetStrategyFromString(str);
+	OutputStrategy(head);
+
 
     status = FltRegisterFilter( DriverObject,
                                 &FilterRegistration,
@@ -615,6 +441,8 @@ Return Value:
 
     FltUnregisterFilter( gFilterHandle );
 
+	FreeStrategy(head);
+
     return STATUS_SUCCESS;
 }
 
@@ -622,269 +450,237 @@ Return Value:
 /*************************************************************************
     MiniFilter callback routines.
 *************************************************************************/
+
+
 FLT_PREOP_CALLBACK_STATUS
-FsFilterContextPreOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
-/*++
-
-Routine Description:
-
-    This routine is a pre-operation dispatch routine for this miniFilter.
-
-    This is non-pageable because it could be called on the paging path
-
-Arguments:
-
-    Data - Pointer to the filter callbackData that is passed to us.
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance, its associated volume and
-        file object.
-
-    CompletionContext - The context for the completion routine for this
-        operation.
-
-Return Value:
-
-    The return value is the status of the operation.
-
---*/
+PreCreate(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext)
 {
-    NTSTATUS status;
+	FLT_PREOP_CALLBACK_STATUS retVal = FLT_PREOP_SUCCESS_WITH_CALLBACK;
+	if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+	{
+		return retVal;
+	}
 
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( CompletionContext );
-
-    PT_DBG_PRINT( PTDBG_TRACE_ROUTINES,
-                  ("FsFilterContext!FsFilterContextPreOperation: Entered\n") );
-
-    //
-    //  See if this is an operation we would like the operation status
-    //  for.  If so request it.
-    //
-    //  NOTE: most filters do NOT need to do this.  You only need to make
-    //        this call if, for example, you need to know if the oplock was
-    //        actually granted.
-    //
-
-    if (FsFilterContextDoRequestOperationStatus( Data )) {
-
-        status = FltRequestOperationStatusCallback( Data,
-                                                    FsFilterContextOperationStatusCallback,
-                                                    (PVOID)(++OperationStatusCtx) );
-        if (!NT_SUCCESS(status)) {
-
-            PT_DBG_PRINT( PTDBG_TRACE_OPERATION_STATUS,
-                          ("FsFilterContext!FsFilterContextPreOperation: FltRequestOperationStatusCallback Failed, status=%08x\n",
-                           status) );
-        }
-    }
-
-    // This template code does not do anything with the callbackData, but
-    // rather returns FLT_PREOP_SUCCESS_WITH_CALLBACK.
-    // This passes the request down to the next miniFilter in the chain.
-
-    return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+	return retVal;
 }
 
 
 
-VOID
-FsFilterContextOperationStatusCallback (
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_ PFLT_IO_PARAMETER_BLOCK ParameterSnapshot,
-    _In_ NTSTATUS OperationStatus,
-    _In_ PVOID RequesterContext
-    )
-/*++
 
-Routine Description:
-
-    This routine is called when the given operation returns from the call
-    to IoCallDriver.  This is useful for operations where STATUS_PENDING
-    means the operation was successfully queued.  This is useful for OpLocks
-    and directory change notification operations.
-
-    This callback is called in the context of the originating thread and will
-    never be called at DPC level.  The file object has been correctly
-    referenced so that you can access it.  It will be automatically
-    dereferenced upon return.
-
-    This is non-pageable because it could be called on the paging path
-
-Arguments:
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance, its associated volume and
-        file object.
-
-    RequesterContext - The context for the completion routine for this
-        operation.
-
-    OperationStatus -
-
-Return Value:
-
-    The return value is the status of the operation.
-
---*/
-{
-    UNREFERENCED_PARAMETER( FltObjects );
-
-    PT_DBG_PRINT( PTDBG_TRACE_ROUTINES,
-                  ("FsFilterContext!FsFilterContextOperationStatusCallback: Entered\n") );
-
-    PT_DBG_PRINT( PTDBG_TRACE_OPERATION_STATUS,
-                  ("FsFilterContext!FsFilterContextOperationStatusCallback: Status=%08x ctx=%p IrpMj=%02x.%02x \"%s\"\n",
-                   OperationStatus,
-                   RequesterContext,
-                   ParameterSnapshot->MajorFunction,
-                   ParameterSnapshot->MinorFunction,
-                   FltGetIrpName(ParameterSnapshot->MajorFunction)) );
-}
 
 
 FLT_POSTOP_CALLBACK_STATUS
-FsFilterContextPostOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_opt_ PVOID CompletionContext,
-    _In_ FLT_POST_OPERATION_FLAGS Flags
-    )
-/*++
-
-Routine Description:
-
-    This routine is the post-operation completion routine for this
-    miniFilter.
-
-    This is non-pageable because it may be called at DPC level.
-
-Arguments:
-
-    Data - Pointer to the filter callbackData that is passed to us.
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance, its associated volume and
-        file object.
-
-    CompletionContext - The completion context set in the pre-operation routine.
-
-    Flags - Denotes whether the completion is successful or is being drained.
-
-Return Value:
-
-    The return value is the status of the operation.
-
---*/
+PostCreate(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext, _In_ FLT_POST_OPERATION_FLAGS Flags)
 {
-    UNREFERENCED_PARAMETER( Data );
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( CompletionContext );
-    UNREFERENCED_PARAMETER( Flags );
+	FLT_POSTOP_CALLBACK_STATUS retVal = FLT_POSTOP_FINISHED_PROCESSING;
 
-    PT_DBG_PRINT( PTDBG_TRACE_ROUTINES,
-                  ("FsFilterContext!FsFilterContextPostOperation: Entered\n") );
+	NTSTATUS status;
 
-    return FLT_POSTOP_FINISHED_PROCESSING;
+	if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+	{
+		return retVal;
+	}
+
+
+	//set the stream handle context
+	PSTREAM_HANDLE_CONTEXT newCtx = NULL;
+	status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, (PFLT_CONTEXT *)&newCtx);
+	if (!NT_SUCCESS(status))
+	{
+		status = FltAllocateContext(FltObjects->Filter, FLT_STREAMHANDLE_CONTEXT,
+			sizeof(STREAM_HANDLE_CONTEXT), NonPagedPool, (PFLT_CONTEXT *)&newCtx);
+
+		if (!NT_SUCCESS(status))
+		{
+			return retVal;
+		}
+
+		PFLT_CONTEXT oldCtx;
+		status = FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject,
+			FLT_SET_CONTEXT_KEEP_IF_EXISTS, newCtx, &oldCtx);
+		if (oldCtx != NULL)
+		{
+			newCtx = (PSTREAM_HANDLE_CONTEXT)oldCtx;
+		}
+		if (!NT_SUCCESS(status))
+		{
+			return retVal;
+		}
+	}
+	newCtx->ftp = NULL;
+	newCtx->isEncrypted = FALSE;
+	newCtx->isEncryptFileType = FALSE;
+
+
+
+	//ONLY encrypt file type and secret process can go through;
+	BOOLEAN isDir;
+	status = FltIsDirectory(FltObjects->FileObject, FltObjects->Instance, &isDir);
+	if (!NT_SUCCESS(status) || isDir)
+	{
+		return retVal;
+	}
+
+	PFLT_FILE_NAME_INFORMATION nameInfo = NULL;
+	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_OPENED | FLT_FILE_NAME_QUERY_ALWAYS_ALLOW_CACHE_LOOKUP, &nameInfo);
+	if (!NT_SUCCESS(status))
+	{
+		DbgPrint("FltGetFileNameInformation error in PostCreate.");
+		return retVal;
+	}
+	status = FltParseFileNameInformation(nameInfo);
+	if (!NT_SUCCESS(status))
+	{
+		DbgPrint("FltParseFileNameInformation error in PostCreate");
+		return retVal;
+	}
+
+	PFILE_TYPE_PROCESS current;
+	if (!IsInStrategyList(head, &(nameInfo->Name), &current))
+	{
+		DbgPrint("It's not the encrypt file type.");
+		return retVal;
+	}
+	DbgPrint("The encrypt file type: %wZ.", &(nameInfo->Name));
+
+	PCHAR procName = GetCurrentProcessName();
+	if (!IsSecretProcess(current, procName))
+	{
+		DbgPrint("It's not the process we are monitoring.");
+		return retVal;
+	}
+
+	DbgPrint("It's the process: %s", procName);
+
+	//set the context
+	newCtx->ftp = current;
+	newCtx->isEncrypted = FALSE;
+	newCtx->isEncryptFileType = TRUE;
+
+	status = FltQueryInformationFile(FltObjects->Instance, Data->Iopb->TargetFileObject,
+		&(newCtx->fileInfo), sizeof(FILE_STANDARD_INFORMATION), FileStandardInformation, NULL);
+
+	
+	return retVal;
 }
+
+
+
+
 
 
 FLT_PREOP_CALLBACK_STATUS
-FsFilterContextPreOperationNoPostOperation (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
-/*++
-
-Routine Description:
-
-    This routine is a pre-operation dispatch routine for this miniFilter.
-
-    This is non-pageable because it could be called on the paging path
-
-Arguments:
-
-    Data - Pointer to the filter callbackData that is passed to us.
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance, its associated volume and
-        file object.
-
-    CompletionContext - The context for the completion routine for this
-        operation.
-
-Return Value:
-
-    The return value is the status of the operation.
-
---*/
+PreRead(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext)
 {
-    UNREFERENCED_PARAMETER( Data );
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( CompletionContext );
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
 
-    PT_DBG_PRINT( PTDBG_TRACE_ROUTINES,
-                  ("FsFilterContext!FsFilterContextPreOperationNoPostOperation: Entered\n") );
-
-    // This template code does not do anything with the callbackData, but
-    // rather returns FLT_PREOP_SUCCESS_NO_CALLBACK.
-    // This passes the request down to the next miniFilter in the chain.
-
-    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
 
 
-BOOLEAN
-FsFilterContextDoRequestOperationStatus(
-    _In_ PFLT_CALLBACK_DATA Data
-    )
-/*++
 
-Routine Description:
 
-    This identifies those operations we want the operation status for.  These
-    are typically operations that return STATUS_PENDING as a normal completion
-    status.
-
-Arguments:
-
-Return Value:
-
-    TRUE - If we want the operation status
-    FALSE - If we don't
-
---*/
+FLT_POSTOP_CALLBACK_STATUS
+PostRead(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext, _In_ FLT_POST_OPERATION_FLAGS Flags)
 {
-    PFLT_IO_PARAMETER_BLOCK iopb = Data->Iopb;
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	UNREFERENCED_PARAMETER(Flags);
+	FLT_POSTOP_CALLBACK_STATUS retVal = FLT_POSTOP_FINISHED_PROCESSING;
 
-    //
-    //  return boolean state based on which operations we are interested in
-    //
+	//get the data then print it
+	PVOID buffer = NULL;
+	PFLT_IO_PARAMETER_BLOCK iopb = Data->Iopb;
+	PSTREAM_HANDLE_CONTEXT context = NULL;
+	NTSTATUS status;
 
-    return (BOOLEAN)
+	if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+	{
+		return retVal;
+	}
 
-            //
-            //  Check for oplock operations
-            //
+	//check the context
+	status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, (PFLT_CONTEXT *)&context);
+	if (!NT_SUCCESS(status))
+	{
+		return retVal;
+	}
+	if (context == NULL)
+	{
+		return retVal;
+	}
+	if (!(context->isEncryptFileType))
+	{
+		return retVal;
+	}
+	DbgPrint("The File is a encrypt file type");
+	
+	PCHAR procName = GetCurrentProcessName();
+	DbgPrint("the Process Name in Post Read : %s", procName);
+	if (!IsSecretProcess(context->ftp, procName))
+	{
+		return retVal;
+	}
 
-             (((iopb->MajorFunction == IRP_MJ_FILE_SYSTEM_CONTROL) &&
-               ((iopb->Parameters.FileSystemControl.Common.FsControlCode == FSCTL_REQUEST_FILTER_OPLOCK)  ||
-                (iopb->Parameters.FileSystemControl.Common.FsControlCode == FSCTL_REQUEST_BATCH_OPLOCK)   ||
-                (iopb->Parameters.FileSystemControl.Common.FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_1) ||
-                (iopb->Parameters.FileSystemControl.Common.FsControlCode == FSCTL_REQUEST_OPLOCK_LEVEL_2)))
 
-              ||
 
-              //
-              //    Check for directy change notification
-              //
+	if (iopb->Parameters.Read.MdlAddress != NULL)
+	{
+		buffer = MmGetSystemAddressForMdlSafe(iopb->Parameters.Read.MdlAddress, NormalPagePriority);
+	}
 
-              ((iopb->MajorFunction == IRP_MJ_DIRECTORY_CONTROL) &&
-               (iopb->MinorFunction == IRP_MN_NOTIFY_CHANGE_DIRECTORY))
-             );
+	if (buffer == NULL)
+	{
+		buffer = iopb->Parameters.Read.ReadBuffer;
+	}
+	if (buffer == NULL)
+	{
+		DbgPrint("Can't get buffer in Post Read");
+		return retVal;
+	}
+
+	DbgPrint("%s", buffer);
+
+	
+
+	return retVal;
 }
+
+
+
+/*++
+	Additional function
+--*/
+ULONG GetProcessNameOffset()
+{
+	ULONG i;
+
+	PEPROCESS curproc = PsGetCurrentProcess();
+	for (i = 0; i < 3 * PAGE_SIZE; i++)
+	{
+		if (!strncmp("System", (PCHAR)curproc + i, strlen("System")))
+		{
+			return i;
+		}
+	}
+	return 0;
+}
+
+PCHAR GetCurrentProcessName()
+{
+	PCHAR name = NULL;
+	PEPROCESS curproc = PsGetCurrentProcess();
+
+	if (offset)
+	{
+		name = (PCHAR)curproc + offset;
+	}
+	return name;
+}
+

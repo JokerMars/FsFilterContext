@@ -4,13 +4,10 @@
 
 [Version]
 Signature   = "$Windows NT$"
-; TODO - Change the Class and ClassGuid to match the Load Order Group value, see http://msdn.microsoft.com/en-us/windows/hardware/gg462963
-; Class       = "ActivityMonitor"                         ;This is determined by the work this filter driver does
-; ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}    ;This value is determined by the Load Order Group value
-Class = "_TODO_Change_Class_appropriately_"
-ClassGuid = {_TODO_Change_ClassGuid_appropriately_}
+Class       = "ActivityMonitor"                         
+ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}    
 Provider    = %ManufacturerName%
-DriverVer   = 
+DriverVer   = 10/10/2016,1.0.0.0
 CatalogFile = FsFilterContext.cat
 
 [DestinationDirs]
@@ -50,9 +47,8 @@ Dependencies     = "FltMgr"
 ServiceType      = 2                            ;SERVICE_FILE_SYSTEM_DRIVER
 StartType        = 3                            ;SERVICE_DEMAND_START
 ErrorControl     = 1                            ;SERVICE_ERROR_NORMAL
-; TODO - Change the Load Order Group value, see http://connect.microsoft.com/site221/content/content.aspx?ContentID=2512
-; LoadOrderGroup = "FSFilter Activity Monitor"
-LoadOrderGroup = "_TODO_Change_LoadOrderGroup_appropriately_"
+
+LoadOrderGroup = "FSFilter Encryption"
 AddReg           = MiniFilter.AddRegistry
 
 ;
@@ -85,7 +81,7 @@ FsFilterContext.sys = 1,,
 
 [Strings]
 ; TODO - Add your manufacturer
-ManufacturerName        = "Template"
+ManufacturerName        = "KMSoft"
 ServiceDescription      = "FsFilterContext Mini-Filter Driver"
 ServiceName             = "FsFilterContext"
 DriverName              = "FsFilterContext"
@@ -94,7 +90,5 @@ DiskId1                 = "FsFilterContext Device Installation Disk"
 ;Instances specific information.
 DefaultInstance         = "FsFilterContext Instance"
 Instance1.Name          = "FsFilterContext Instance"
-; TODO - Change the altitude value, see http://connect.microsoft.com/site221/content/content.aspx?ContentID=2512
-;Instance1.Altitude      = "370030"
-Instance.Altitude       = "_TODO_Change_Altitude_appropriately_"
+Instance1.Altitude      = "141000"
 Instance1.Flags         = 0x0              ; Allow all attachments
